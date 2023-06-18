@@ -1,8 +1,8 @@
 {
   "question1":
-  {"text": "Оцените предмет 1-10:"},
+  {"text": "Оцените предмет 1-10:", "requirements": "scale"},
   "question2":
-  {"text": "Оцените препода 1-10:"},
+  {"text": "Оцените препода 1-10:", "requirements": "scale"},
   "question3":
-  {"text": "Ваши комментарии:"}
+  {"text": "Ваши комментарии:", "requirements": "string"}
 }
