@@ -1,6 +1,7 @@
 import telebot
 from telebot import types
 import json
+import sqlite3
 
 
 with open("token.txt", 'r') as file:
@@ -18,6 +19,13 @@ def send_welcome(message):
 	"""
 	Приветственный экран
 	"""
+	conn = sqlite3.connect('student_base.sql')
+	cursor = conn.cursor()
+	cursor.execute('CREATE TABLE IF NOT EXISTS users (id int primary key, group_name varchar(10))')
+	conn.commit()
+	cursor.close()
+	conn.close()
+
 	markup = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
 	button1 = types.KeyboardButton('Семестровый опрос')
 	button2 = types.KeyboardButton('Обратная связь')
@@ -41,7 +49,6 @@ def base_page(message):
 	print(message.from_user.id)
 	bot.register_next_step_handler(message, start)
 
-
 def start(message):
 	"""
 	Обработка выбранной на стартовом экране опции
@@ -49,37 +56,49 @@ def start(message):
 	Обратная связь - пользователь пишет обращение в свободной форме
 	"""
 
-	def ask(message):
+# _______________________________СЕМЕСТРОВЫЕ ФОРМЫ_____________________________________
+	def semester_form(message):
 		"""
-		Функция для вывода вопроса в чат
-		Дополнительно получает requirement для проверки формата ответа пользователя далее
+		Последовательный вывод вопросов из вопросника и прием ответов
 		"""
-		global requirement
-		question = bot.send_message(message.chat.id, quest['text'])
-		requirement = quest["requirements"]
-		bot.register_next_step_handler(question, read_answer)
 
-	def read_answer(answer):
-		"""
-		Функция для чтения ответа пользователя
-		Проверяет корректность ввода в зависимости от требований в переменной requirement
-		Если ответ корректен по форме, то переходит к следующему вопросу,
-		если нет - задает вопрос, пока не будет получен корректный ответ
-		"""
-		nonlocal quest
-		try:
-			if is_correct(answer, requirement):
-				print(f"{quest['text']} correct answer text -> {answer.text} from {answer.from_user.first_name}")
-				quest = next(questions)
-				ask(answer)
-			else:
-				print(f"{quest['text']} incorrect answer text -> {answer.text} from {answer.from_user.first_name}")
-				wrong_input(answer, requirement)
-				ask(answer)
-		except StopIteration:
-			bot.send_message(message.chat.id, "Спасибо за ответы!")
-			bot.register_next_step_handler(message, base_page)
+		requirement = ''
+		def ask(message):
+			"""
+			Функция для вывода вопроса в чат
+			Дополнительно использует requirement для проверки формата ответа пользователя далее
+			"""
+			question = bot.send_message(message.chat.id, quest['text'])
+			nonlocal requirement
+			requirement = quest["requirements"]
+			bot.register_next_step_handler(question, read_answer)
 
+		def read_answer(answer):
+			"""
+			Функция для чтения ответа пользователя
+			Проверяет корректность ввода в зависимости от требований в переменной requirement
+			Если ответ корректен по форме, то переходит к следующему вопросу,
+			если нет - задает вопрос, пока не будет получен корректный ответ
+			"""
+			nonlocal quest
+			try:
+				if is_correct(answer, requirement):
+					print(f"{quest['text']} correct answer text -> {answer.text} from {answer.from_user.first_name}")
+					quest = next(questions)
+					ask(answer)
+				else:
+					print(f"{quest['text']} incorrect answer text -> {answer.text} from {answer.from_user.first_name}")
+					wrong_input(answer, requirement)
+					ask(answer)
+			except StopIteration:
+				bot.send_message(message.chat.id, "Спасибо за ответы!")
+				bot.register_next_step_handler(message, base_page)
+
+		questions = (i for i in data.values())
+		quest = next(questions)
+		ask(message)
+
+# _____________________________________FEEDBACK_____________________________________
 
 	def read_feedback(message):
 		"""
@@ -95,17 +114,23 @@ def start(message):
 			bot.send_message(message.chat.id, "Ваши замечания/предложения:")
 			bot.register_next_step_handler(message, read_feedback)
 
+# ______________________Обработка нажатий на стартовом экране___________________________
 
 	if message.text == 'Семестровый опрос':
-		questions = (i for i in data.values())
-		quest = next(questions)
-		ask(message)
+		markup = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
+		button1 = types.KeyboardButton('Физра')
+		button2 = types.KeyboardButton('Матан')
+		markup.row(button1)
+		markup.row(button2)
+		bot.send_message(message.chat.id, "Выбери предмет!", reply_markup=markup)
+		bot.register_next_step_handler(message, semester_form)
+
 
 	if message.text == 'Обратная связь':
 		bot.send_message(message.chat.id, "Ваши замечания/предложения:")
 		bot.register_next_step_handler(message, read_feedback)
 
-
+# _____________________________________ПРОВЕРКИ___________________________________________
 	def is_correct(message, requirement):
 		"""
 		Функция для проверки корректности ответа пользователя
@@ -142,7 +167,7 @@ def start(message):
 			bot.send_message(message.chat.id, 'Используйте буквы и числа!')
 
 
-
+# _____________________________________ПРОЧИЕ КОМАНДЫ___________________________________________
 
 @bot.message_handler(commands=['help'])
 def help(message):
