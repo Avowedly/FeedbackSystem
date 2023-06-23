@@ -15,7 +15,7 @@ with open("disciplines.json", 'r', encoding="UTF-8") as file:
 	disciplines_data = json.load(file)
 
 bot = telebot.TeleBot(token)
-bot.delete_webhook()
+#bot.delete_webhook()
 
 
 # ___________________________________БАЗА ДАННЫХ_________________________________________
@@ -105,12 +105,11 @@ def show_database(name, type):
 	if type == 'forms':
 		cursor.execute("SELECT * FROM forms")
 		forms_data = cursor.fetchall()
-		print(forms_data)
 		for ids, date, discipline, *values in forms_data:
 			print(f'User {ids} date {date} discipline {discipline} -> answers: {values}')
-
 	cursor.close()
 	conn.close()
+
 
 def is_group_correct(group):
 	"""
@@ -134,12 +133,13 @@ def user_registration(message):
 	if is_group_correct(group):
 		registration_counter = 0
 		insert_field(name='semester_forms', type='users', args=(message.from_user.id, group))
-		bot.send_message(message.chat.id, f"Приятно познакомиться! \nТеперь я смогу персонализировать твои анкеты!")
+		bot.send_message(message.chat.id, f"Приятно познакомиться! 👋")
+		registration_counter = 0
 	else:
 		registration_counter += 1
 		if registration_counter>=3:
-			bot.send_message(message.chat.id, f"Издеваешься? :c")
-		bot.send_message(message.chat.id, f"Обрати внимание на формат!\nФормат: БМТX-XX(Б|М) ")
+			bot.send_message(message.chat.id, f"Издеваешься? 😕")
+		bot.send_message(message.chat.id, f"Обрати внимание на формат: БМТX-XX(Б|М) ⚠️")
 		bot.register_next_step_handler(message, user_registration)
 
 
@@ -157,12 +157,11 @@ def send_welcome(message):
 
 	if message.from_user.id in users_ids:
 		markup = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
-		button1 = types.KeyboardButton('Семестровый опрос')
-		button2 = types.KeyboardButton('Обратная связь')
+		button1 = types.KeyboardButton('📑 Семестровый опрос')
+		button2 = types.KeyboardButton('✍️ Обратная связь')
 		markup.row(button1)
 		markup.row(button2)
-		bot.send_message(message.chat.id, f"Привет, {message.from_user.first_name}! Чем могу помочь?", reply_markup=markup)
-		print(message.from_user.id)
+		bot.send_message(message.chat.id, f"Привет, {message.from_user.first_name}! Чем могу помочь? 🤖", reply_markup=markup)
 		bot.register_next_step_handler(message, start)
 
 	else:
@@ -178,17 +177,23 @@ def start(message):
 	"""
 
 # _______________________________СЕМЕСТРОВЫЕ ФОРМЫ_____________________________________
-	@bot.callback_query_handler(func=lambda callback: True)
-	def semester_form(callback):
+	disciplines = ''
+
+	def semester_form(message):
 		"""
 		Последовательный вывод вопросов из вопросника и прием ответов
 		"""
+		if message.text == '/return':
+			bot.send_message(message.chat.id, "Опрос отменен 🔚", reply_markup=types.ReplyKeyboardRemove())
+			back_to_info(message)
+			return 0
 
+		nonlocal disciplines
 		requirement = ''
-		discipline = disciplines[int(callback.data)]
-		user_id = callback.from_user.id
-		date = datetime.datetime.fromtimestamp(callback.message.date).strftime('%Y-%m-%d %H:%M:%S')
-		arguments = [user_id, date, discipline]
+		current_user_discipline = message.text
+		user_id = message.from_user.id
+		date = datetime.datetime.fromtimestamp(message.date).strftime('%Y-%m-%d %H:%M:%S')
+		arguments = [user_id, date, current_user_discipline]
 		def ask(message):
 			"""
 			Функция для вывода вопроса в чат
@@ -206,6 +211,11 @@ def start(message):
 			Если ответ корректен по форме, то переходит к следующему вопросу,
 			если нет - задает вопрос, пока не будет получен корректный ответ
 			"""
+			if answer.text == '/return':
+				bot.send_message(message.chat.id, "Данные не были сохранены ⚠️")
+				back_to_info(answer)
+				return 0
+
 			nonlocal quest
 			try:
 				if is_correct(answer, requirement):
@@ -220,7 +230,7 @@ def start(message):
 			except StopIteration:
 				arguments.append(answer.text)
 				insert_field('semester_forms', type='forms', args=tuple(arguments))
-				bot.send_message(message.chat.id, "Спасибо за ответы!")
+				bot.send_message(message.chat.id, "Спасибо за ответы! 🙏")
 
 		questions = (q for q in form_data.values())
 		quest = next(questions)
@@ -233,38 +243,48 @@ def start(message):
 		Функция для чтения обращение пользователя
 		Принимает только текст
 		"""
+
 		if message.content_type == 'text':
 			date = datetime.datetime.fromtimestamp(message.date).strftime('%Y-%m-%d %H:%M:%S')
 			with open("feedback.txt", "a", encoding='UTF-8') as file:
 				file.write(f'From {message.from_user.first_name} {message.from_user.last_name} at {date}: {message.text}\n')
-			bot.send_message(465825972, f"*Feedback from* {message.from_user.first_name} {message.from_user.last_name}: {message.text}", parse_mode='markdown')
-			bot.send_message(message.chat.id, "Спасибо за обратную связь!")
+			bot.send_message(465825972, f"💬 *Feedback from* {message.from_user.first_name} {message.from_user.last_name}: {message.text}", parse_mode='markdown')
+			bot.send_message(message.chat.id, "Спасибо за обратную связь! 🙏")
 		else:
-			bot.send_message(message.chat.id, "Словами, пожалуйста")
-			bot.send_message(message.chat.id, "Ваши замечания/предложения:")
+			bot.send_message(message.chat.id, "Словами, пожалуйста 🙃")
+			bot.send_message(message.chat.id, "Ваши замечания/предложения: ")
 			bot.register_next_step_handler(message, read_feedback)
 
 # ______________________Обработка нажатий на стартовом экране___________________________
 
-	if message.text == 'Семестровый опрос':
+	if message.text == '📑 Семестровый опрос':
 		group = get_group_by_id(name='semester_forms', tg_id=message.from_user.id)
 		try:
 			disciplines = disciplines_data[group]
-			markup = types.InlineKeyboardMarkup()
+			markup = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
 			for i, discipline in enumerate(disciplines):
-				button = types.InlineKeyboardButton(discipline, callback_data=str(i))
+				button = types.KeyboardButton(discipline)
 				markup.row(button)
 			bot.send_message(message.chat.id, "Выбери предмет!", reply_markup=markup)
-			#bot.register_next_step_handler(message, semester_form)
+			bot.register_next_step_handler(message, semester_form)
 		except KeyError:
-			bot.send_message(message.chat.id, "Упс, кажется твоей группы нет в списках!")
+			bot.send_message(message.chat.id, "Упс, кажется твоей группы нет в списках! ☹️")
 			bot.send_message(message.chat.id, "Проверь корректность группы через /edit или обратись за помощью /help ")
 
 
-	if message.text == 'Обратная связь':
-		bot.send_message(message.chat.id, "Ваши замечания/предложения:")
+	elif message.text == '✍️ Обратная связь':
+		bot.send_message(message.chat.id, "Ваши замечания/предложения: ️")
 		bot.register_next_step_handler(message, read_feedback)
 
+
+	elif message.text == '/help':
+		help(message)
+
+	elif message.text == '/info':
+		info(message)
+
+	elif message.text == '/edit':
+		edit(message)
 # _____________________________________ПРОВЕРКИ___________________________________________
 	def is_correct(message, requirement):
 		"""
@@ -295,11 +315,11 @@ def start(message):
 		"""
 		if message.content_type == 'text':
 			if requirement == 'scale':
-				bot.send_message(message.chat.id, 'Введите целое число от 0 до 10')
+				bot.send_message(message.chat.id, 'Введите целое число от 1 до 10 🔢')
 			if requirement == 'string':
-				bot.send_message(message.chat.id, 'Используйте буквы и числа!')
+				bot.send_message(message.chat.id, 'Используйте буквы и числа! 🔡')
 		else:
-			bot.send_message(message.chat.id, 'Используйте буквы и числа!')
+			bot.send_message(message.chat.id, 'Используйте буквы и числа! 🔡')
 
 
 # _____________________________________INFO, HELP, EDIT___________________________________________
@@ -307,13 +327,11 @@ def start(message):
 @bot.message_handler(commands=['info'])
 def info(message):
 	bot.send_message(message.chat.id,
-'''Привет! Я Бот обратной связи *Факультета БМТ*!
-Моя задача (удивительно) собирать *обратную связь* студентов!
-Свою задачу я решаю двумя способами: семестровые формы и обращения
-*Семестровая форма* - анкета с вопросами по конкретной дисциплине, которую лучше всего заполнять в конце семетра.
-*Обращение* - возможность для Вас в свободной форме высказаться на любую тему.
-Все ответы хранятся используются в *обезличенном виде*, так как я сторонник анонимности!
-Cтарайтесь писать мне чаще по вопросам, которые Вас беспокоят, чтобы вы вместе делали наш *Факультет БМТ* лучше!
+'''Привет! Я Бот обратной связи *Факультета БМТ* 🧬
+Я использую семестровые формы и обращения, чтобы накапливать обратную связь студентов.
+*Семестровая форма* - анкета с вопросами по одной из дисциплин текущего семестра.
+*Обращение* - возможность высказаться в свободной форме на любую тему.
+Все ответы хранятся в *обезличенном виде*. Я сторонник анонимности!
 Используйте /start для начала общения со мной.''',
 				parse_mode='markdown')
 
@@ -321,9 +339,15 @@ Cтарайтесь писать мне чаще по вопросам, кото
 @bot.message_handler(commands=['help'])
 def help(message):
 	markup = types.InlineKeyboardMarkup()
-	button1 = types.InlineKeyboardButton('Матвей Могилев', url="https://t.me/Avowed721")
+	button1 = types.InlineKeyboardButton('🙋‍♂️ Матвей Могилев', url="https://t.me/Avowed721")
 	markup.row(button1)
-	bot.send_message(message.chat.id, "Если что-то не работает, пишите!", reply_markup=markup)
+	bot.send_message(message.chat.id, "Если что-то не работает, пишите! 👇", reply_markup=markup)
+
+
+
+@bot.message_handler(commands=['return'])
+def back_to_info(message):
+	commands(message)
 
 
 @bot.message_handler(commands=['edit'])
@@ -353,21 +377,27 @@ def group_edit(message):
 
 
 def group_edit_2(message):
+	global registration_counter
 	group = message.text.strip().upper()
 	if is_group_correct(group):
 		update_group(name='semester_forms', tg_id=message.from_user.id, group=group )
 		bot.send_message(message.chat.id, f"Готово! \nТеперь Ваша группа: {group}")
+		registration_counter = 0
 	else:
-		bot.send_message(message.chat.id, f"Обрати внимание на формат!\nФормат: БМТX-XX(Б|М) ")
+		registration_counter += 1
+		if registration_counter >= 3:
+			bot.send_message(message.chat.id, f"Издеваешься? 😕")
+		bot.send_message(message.chat.id, f"Обрати внимание на формат: БМТX-XX(Б|М) ⚠️")
 		bot.register_next_step_handler(message, group_edit_2)
 
 
 @bot.message_handler(content_types=['text'])
-def other(message):
+def commands(message):
 	bot.send_message(message.chat.id,
 f''' /start - начать
 /info - полезная информация
-/help - помощь
+/return - выйти из опроса
+/help - помощь 
 /edit - изменить группу''',
 				parse_mode='markdown')
 
