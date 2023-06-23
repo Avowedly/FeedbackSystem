@@ -189,6 +189,12 @@ def start(message):
 			return 0
 
 		nonlocal disciplines
+
+		if message.text not in disciplines:
+			bot.send_message(message.chat.id, "Пожалуйста, используйте кнопки 🙃️")
+			choose_semester_form(message)
+			return 0
+
 		requirement = ''
 		current_user_discipline = message.text
 		user_id = message.from_user.id
@@ -231,6 +237,8 @@ def start(message):
 				arguments.append(answer.text)
 				insert_field('semester_forms', type='forms', args=tuple(arguments))
 				bot.send_message(message.chat.id, "Спасибо за ответы! 🙏")
+				bot.send_message(message.chat.id, "Продолжим? /return для отмены")
+				choose_semester_form(message)
 
 		questions = (q for q in form_data.values())
 		quest = next(questions)
@@ -257,7 +265,12 @@ def start(message):
 
 # ______________________Обработка нажатий на стартовом экране___________________________
 
-	if message.text == '📑 Семестровый опрос':
+	def choose_semester_form(message):
+		'''
+		Выводит кнопки с дисциплинами в зависимости от группы пользователя
+		Далее перенаправляет в semester_form(), если группа есть в базе
+		'''
+		nonlocal disciplines
 		group = get_group_by_id(name='semester_forms', tg_id=message.from_user.id)
 		try:
 			disciplines = disciplines_data[group]
@@ -271,6 +284,8 @@ def start(message):
 			bot.send_message(message.chat.id, "Упс, кажется твоей группы нет в списках! ☹️")
 			bot.send_message(message.chat.id, "Проверь корректность группы через /edit или обратись за помощью /help ")
 
+	if message.text == '📑 Семестровый опрос':
+		choose_semester_form(message)
 
 	elif message.text == '✍️ Обратная связь':
 		bot.send_message(message.chat.id, "Ваши замечания/предложения: ️")
@@ -322,7 +337,7 @@ def start(message):
 			bot.send_message(message.chat.id, 'Используйте буквы и числа! 🔡')
 
 
-# _____________________________________INFO, HELP, EDIT___________________________________________
+# _____________________________________INFO, HELP, EDIT, RETURN___________________________________________
 
 @bot.message_handler(commands=['info'])
 def info(message):
@@ -375,6 +390,10 @@ def group_edit(message):
 		bot.send_message(message.chat.id, "Введите новую группу:")
 		bot.register_next_step_handler(message, group_edit_2)
 
+	else:
+		bot.send_message(message.chat.id, "Пожалуйста, используйте кнопки 🙃️")
+		edit(message)
+
 
 def group_edit_2(message):
 	global registration_counter
@@ -391,6 +410,8 @@ def group_edit_2(message):
 		bot.register_next_step_handler(message, group_edit_2)
 
 
+# ___________________________________МЕНЮ С КОМАНДАМИ_______________________________________
+
 @bot.message_handler(content_types=['text'])
 def commands(message):
 	bot.send_message(message.chat.id,
@@ -400,8 +421,6 @@ f''' /start - начать
 /help - помощь 
 /edit - изменить группу''',
 				parse_mode='markdown')
-
-
 
 
 bot.infinity_polling()
