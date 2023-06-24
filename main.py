@@ -2,7 +2,7 @@ import telebot
 from telebot import types
 import json
 import sqlite3
-import re
+from re import match
 import datetime
 
 with open("token.txt", 'r') as file:
@@ -118,7 +118,7 @@ def is_group_correct(group):
 	Проверка корректности ввода группы
 	"""
 	s = group.strip().upper()
-	res = re.match(r'БМТ[1-5]-[1-8][1-3][Б, М]$', s)
+	res = match(r'БМТ[1-5]-[1-8][1-3][Б, М]$', s)
 	if res is None:
 		return False
 	else:
