@@ -111,6 +111,8 @@ def show_database(name, type):
 	conn.close()
 
 
+# ___________________________________Корректность группы_________________________________________
+
 def is_group_correct(group):
 	"""
 	Проверка корректности ввода группы
@@ -165,7 +167,7 @@ def send_welcome(message):
 		bot.register_next_step_handler(message, start)
 
 	else:
-		bot.send_message(message.chat.id, f"Привет! Кажется мы еще не знакомы. \nПожалуйста, введи свою группу! \nФормат: БМТX-XX(Б|М)")
+		bot.send_message(message.chat.id, f"Привет! Кажется мы еще не знакомы. \nПожалуйста, введите свою группу! \nФормат: БМТX-XX(Б|М)")
 		bot.register_next_step_handler(message, user_registration)
 
 
@@ -237,33 +239,13 @@ def start(message):
 				arguments.append(answer.text)
 				insert_field('semester_forms', type='forms', args=tuple(arguments))
 				bot.send_message(message.chat.id, "Спасибо за ответы! 🙏")
+				bot.send_message(465825972, f"💬 *New Completed Form* for group: {get_group_by_id(name='semester_forms', tg_id=message.from_user.id)}", parse_mode='markdown')
 				bot.send_message(message.chat.id, "Продолжим? /return для отмены")
 				choose_semester_form(message)
 
 		questions = (q for q in form_data.values())
 		quest = next(questions)
 		ask(message)
-
-# _____________________________________FEEDBACK_____________________________________
-
-	def read_feedback(message):
-		"""
-		Функция для чтения обращение пользователя
-		Принимает только текст
-		"""
-
-		if message.content_type == 'text':
-			date = datetime.datetime.fromtimestamp(message.date).strftime('%Y-%m-%d %H:%M:%S')
-			with open("feedback.txt", "a", encoding='UTF-8') as file:
-				file.write(f'From {message.from_user.first_name} {message.from_user.last_name} at {date}: {message.text}\n')
-			bot.send_message(465825972, f"💬 *Feedback from* {message.from_user.first_name} {message.from_user.last_name}: {message.text}", parse_mode='markdown')
-			bot.send_message(message.chat.id, "Спасибо за обратную связь! 🙏")
-		else:
-			bot.send_message(message.chat.id, "Словами, пожалуйста 🙃")
-			bot.send_message(message.chat.id, "Ваши замечания/предложения: ")
-			bot.register_next_step_handler(message, read_feedback)
-
-# ______________________Обработка нажатий на стартовом экране___________________________
 
 	def choose_semester_form(message):
 		'''
@@ -283,6 +265,27 @@ def start(message):
 		except KeyError:
 			bot.send_message(message.chat.id, "Упс, кажется твоей группы нет в списках! ☹️")
 			bot.send_message(message.chat.id, "Проверь корректность группы через /edit или обратись за помощью /help ")
+
+# _____________________________________FEEDBACK_____________________________________
+
+	def read_feedback(message):
+		"""
+		Функция для чтения обращение пользователя
+		Принимает только текст
+		"""
+
+		if message.content_type == 'text':
+			date = datetime.datetime.fromtimestamp(message.date).strftime('%Y-%m-%d %H:%M:%S')
+			with open("feedback.txt", "a", encoding='UTF-8') as file:
+				file.write(f'From {message.from_user.first_name} {message.from_user.last_name} at {date}: {message.text}\n')
+			bot.send_message(465825972, f"💬 *New Feedback*: {message.text}", parse_mode='markdown')
+			bot.send_message(message.chat.id, "Спасибо за обратную связь! 🙏")
+		else:
+			bot.send_message(message.chat.id, "Словами, пожалуйста 🙃")
+			bot.send_message(message.chat.id, "Ваши замечания/предложения: ")
+			bot.register_next_step_handler(message, read_feedback)
+
+# ______________________Обработка нажатий на стартовом экране___________________________
 
 	if message.text == '📑 Семестровый опрос':
 		choose_semester_form(message)
@@ -375,7 +378,6 @@ def edit(message):
 	markup.row(button3)
 	bot.send_message(message.chat.id, f"Вы хотите изменить свою группу?", reply_markup=markup)
 	bot.register_next_step_handler(message, group_edit)
-
 
 
 # ___________________________________ИЗМЕНЕНИЕ ГРУППЫ_______________________________________
