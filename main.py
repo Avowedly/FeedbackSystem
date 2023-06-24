@@ -163,7 +163,7 @@ def send_welcome(message):
 		button2 = types.KeyboardButton('✍️ Обратная связь')
 		markup.row(button1)
 		markup.row(button2)
-		bot.send_message(message.chat.id, f"Привет, {message.from_user.first_name}! Чем могу помочь? 🤖", reply_markup=markup)
+		bot.send_message(message.chat.id, f"Привет! Чем могу помочь? 💁🏻", reply_markup=markup)
 		bot.register_next_step_handler(message, start)
 
 	else:
@@ -278,6 +278,7 @@ def start(message):
 				file.write(f'From {message.from_user.first_name} {message.from_user.last_name} at {date}: {message.text}\n')
 			bot.send_message(465825972, f"💬 *New Feedback*: {message.text}", parse_mode='markdown')
 			bot.send_message(message.chat.id, "Спасибо за обратную связь! 🙏")
+			bot.send_message(message.chat.id, "/start, если хотите написать что-нибудь еще")
 		else:
 			bot.send_message(message.chat.id, "Словами, пожалуйста 🙃")
 			bot.send_message(message.chat.id, "Ваши замечания/предложения: ")
@@ -349,7 +350,7 @@ def info(message):
 *Обращение* - возможность высказаться в свободной форме на любую тему.
 Все ответы хранятся в *обезличенном виде*. Я сторонник анонимности!
 Используйте /start для начала общения со мной.''',
-				parse_mode='markdown')
+				parse_mode='markdown', reply_markup=types.ReplyKeyboardRemove())
 
 
 @bot.message_handler(commands=['help'])
@@ -420,7 +421,7 @@ f''' /start - начать
 /return - выйти из опроса
 /help - помощь 
 /edit - изменить группу''',
-				parse_mode='markdown')
+				parse_mode='markdown', reply_markup=types.ReplyKeyboardRemove())
 
 
 bot.infinity_polling()
