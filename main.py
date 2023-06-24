@@ -154,8 +154,8 @@ def send_welcome(message):
 	"""
 	create_database(name='semester_forms')
 	users_ids = get_ids_from_database(name='semester_forms')
-	show_database(name='semester_forms', type='users')
-	show_database(name='semester_forms', type='forms')
+	# show_database(name='semester_forms', type='users')
+	# show_database(name='semester_forms', type='forms')
 
 	if message.from_user.id in users_ids:
 		markup = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
@@ -227,12 +227,10 @@ def start(message):
 			nonlocal quest
 			try:
 				if is_correct(answer, requirement):
-					print(f"{quest['text']} correct answer text -> {answer.text} from {answer.from_user.first_name}")
 					quest = next(questions)
 					arguments.append(answer.text)
 					ask(answer)
 				else:
-					print(f"{quest['text']} incorrect answer text -> {answer.text} from {answer.from_user.first_name}")
 					wrong_input(answer, requirement)
 					ask(answer)
 			except StopIteration:
