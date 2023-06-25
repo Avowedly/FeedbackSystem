@@ -60,6 +60,20 @@ def get_group_by_id(name, tg_id):
 	return group
 
 
+def get_filled_disciplines(name, tg_id):
+    """
+    Получение спика дисциплин, которые уже были заполнены пользователем
+    """
+    conn = sqlite3.connect(f'{name}.sql')
+    cursor = conn.cursor()
+    cursor.execute("SELECT discipline FROM forms WHERE id = '%s'" % tg_id)
+    data = cursor.fetchall()
+    filled_disciplines = [i[0] for i in data]
+    cursor.close()
+    conn.close()
+    return set(filled_disciplines)
+
+
 def insert_field(name, type, args):
 	"""
 	Добавление нового поля в таблицу
@@ -135,13 +149,13 @@ def user_registration(message):
 	if is_group_correct(group):
 		registration_counter = 0
 		insert_field(name='semester_forms', type='users', args=(message.from_user.id, group))
-		bot.send_message(message.chat.id, f"Приятно познакомиться! 👋")
+		bot.send_message(message.chat.id, f"Приятно познакомиться! 👋\nНажмите /start, чтобы начать ")
 		registration_counter = 0
 	else:
 		registration_counter += 1
 		if registration_counter>=3:
 			bot.send_message(message.chat.id, f"Издеваешься? 😕")
-		bot.send_message(message.chat.id, f"Обрати внимание на формат: БМТX-XX(Б|М) ⚠️")
+		bot.send_message(message.chat.id, f"Обрати внимание на формат: БМТX-XXБ(М) ⚠️")
 		bot.register_next_step_handler(message, user_registration)
 
 
@@ -167,7 +181,7 @@ def send_welcome(message):
 		bot.register_next_step_handler(message, start)
 
 	else:
-		bot.send_message(message.chat.id, f"Привет! Кажется мы еще не знакомы. \nПожалуйста, введите свою группу! \nФормат: БМТX-XX(Б|М)")
+		bot.send_message(message.chat.id, f"Привет! Кажется мы еще не знакомы. \nПожалуйста, введите свою группу! \nФормат: БМТX-XXБ(М)")
 		bot.register_next_step_handler(message, user_registration)
 
 
@@ -253,13 +267,19 @@ def start(message):
 		nonlocal disciplines
 		group = get_group_by_id(name='semester_forms', tg_id=message.from_user.id)
 		try:
-			disciplines = disciplines_data[group]
-			markup = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
-			for i, discipline in enumerate(disciplines):
-				button = types.KeyboardButton(discipline)
-				markup.row(button)
-			bot.send_message(message.chat.id, "Выбери предмет!", reply_markup=markup)
-			bot.register_next_step_handler(message, semester_form)
+			disciplines = set(disciplines_data[group])
+			filled_disciplines = get_filled_disciplines(name='semester_forms', tg_id=message.from_user.id)  # Определение списка уже заполненных предметов
+			disciplines = list(disciplines.difference(filled_disciplines))    # Определение списка еще не заполненных предметов
+
+			if len(disciplines) == 0:
+				bot.send_message(message.chat.id, "Похоже вы заполнили обратную связь по всем предметам! 🎉\nБольшое спасибо за уделенное время 🙏")
+			else:
+				markup = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
+				for i, discipline in enumerate(disciplines):
+					button = types.KeyboardButton(discipline)
+					markup.row(button)
+				bot.send_message(message.chat.id, "Выбери предмет!", reply_markup=markup)
+				bot.register_next_step_handler(message, semester_form)
 		except KeyError:
 			bot.send_message(message.chat.id, "Упс, кажется твоей группы нет в списках! ☹️")
 			bot.send_message(message.chat.id, "Проверь корректность группы через /edit или обратись за помощью /help ")
@@ -407,7 +427,7 @@ def group_edit_2(message):
 		registration_counter += 1
 		if registration_counter >= 3:
 			bot.send_message(message.chat.id, f"Издеваешься? 😕")
-		bot.send_message(message.chat.id, f"Обрати внимание на формат: БМТX-XX(Б|М) ⚠️")
+		bot.send_message(message.chat.id, f"Обрати внимание на формат: БМТX-XXБ(М) ⚠️")
 		bot.register_next_step_handler(message, group_edit_2)
 
 
