@@ -99,41 +99,52 @@ def update_group(tg_id, group):
         connection.commit()
     connection.close()
 
-# ___________________________________Корректность группы_________________________________________
+# ______________________________Регистрация пользователя по группе__________________________
 
-def is_group_correct(group):
-    """
-    Проверка корректности ввода группы
-    """
-    s = group.strip().upper()
-    res = match(r'БМТ[1-5]-[1-8][1-3][Б, М]$', s)
-    if res is None:
-        return False
-    else:
-        return True
-
-
-registration_counter = 0
-
+# def is_group_correct(group):
+#     """
+#     Проверка корректности ввода группы
+#     """
+#     s = group.strip().upper()
+#     res = match(r'БМТ[1-5]-[1-8][1-3][Б, М]$', s)
+#     if res is None:
+#         return False
+#     else:
+#         return True
 
 def user_registration(message):
     """
     Регистрация пользователя по группе и id в телеграме
     """
-    global registration_counter
-    group = message.text.strip().upper()
-    if is_group_correct(group):
-        registration_counter = 0
-        insert_field(table='users', args=(message.from_user.id, group))
-        bot.send_message(message.chat.id, f"Приятно познакомиться! 👋\nНажмите /start, чтобы начать ")
-        registration_counter = 0
+    level = message.text
+    local_groups = []
+
+    if level in ['Бакалавриат', 'Магистратура']:
+        markup = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
+        groups = disciplines_data.keys()
+        if level == 'Бакалавриат':
+            local_groups = [group for group in groups if group.endswith('Б')]
+        elif level == 'Магистратура':
+            local_groups = [group for group in groups if group.endswith('М')]
+
+        for group1, group2 in grouped(local_groups, 2):
+            markup.row(types.KeyboardButton(group1), types.KeyboardButton(group2))
+        bot.send_message(message.chat.id, "Пожалуйста, выберите свою группу", reply_markup=markup)
+        bot.register_next_step_handler(message, choose_group)
+
     else:
-        registration_counter += 1
-        if registration_counter >= 3:
-            bot.send_message(message.chat.id, f"Издеваешься? 😕")
-        bot.send_message(message.chat.id, f"Обрати внимание на формат: БМТX-XXБ(М) ⚠️")
+        bot.send_message(message.chat.id, "Пожалуйста, используйте кнопки 🙃️")
         bot.register_next_step_handler(message, user_registration)
 
+def choose_group(message):
+
+    group = message.text
+    if group in disciplines_data.keys():
+        insert_field(table='users', args=(message.from_user.id, group))
+        bot.send_message(message.chat.id, f"Приятно познакомиться! 👋\nНажмите /start, чтобы начать ")
+    else:
+        bot.send_message(message.chat.id, "Пожалуйста, используйте кнопки 🙃️")
+        bot.register_next_step_handler(message, choose_group)
 
 # _________________________________ПРИВЕТСТВЕННЫЙ ЭКРАН________________________________________
 
@@ -156,8 +167,14 @@ def send_welcome(message):
         bot.register_next_step_handler(message, start)
 
     else:
+        markup = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
+        button1 = types.KeyboardButton("Бакалавриат")
+        button2 = types.KeyboardButton("Магистратура")
+        markup.row(button1)
+        markup.row(button2)
         bot.send_message(message.chat.id,
-                         f"Привет! Кажется мы еще не знакомы. \nПожалуйста, введите свою группу! \nФормат: БМТX-XXБ(М)")
+                         "Привет! Кажется мы еще не знакомы. \nГде Вы обучаетесь?",
+                         reply_markup=markup)
         bot.register_next_step_handler(message, user_registration)
 
 
@@ -253,17 +270,17 @@ def start(message):
 
             if len(disciplines) == 0:
                 bot.send_message(message.chat.id,
-                                 "Похоже вы заполнили обратную связь по всем предметам! 🎉\nБольшое спасибо за уделенное время 🙏")
+                                 "Похоже Вы заполнили обратную связь по всем предметам! 🎉\nБольшое спасибо за уделенное время 🙏")
             else:
                 markup = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
-                for i, discipline in enumerate(disciplines):
+                for discipline in disciplines:
                     button = types.KeyboardButton(discipline)
                     markup.row(button)
-                bot.send_message(message.chat.id, "Выбери предмет!", reply_markup=markup)
+                bot.send_message(message.chat.id, "Выберите предмет!", reply_markup=markup)
                 bot.register_next_step_handler(message, semester_form)
         except KeyError:
-            bot.send_message(message.chat.id, "Упс, кажется твоей группы нет в списках! ☹️")
-            bot.send_message(message.chat.id, "Проверь корректность группы через /edit или обратись за помощью /help ")
+            bot.send_message(message.chat.id, "Упс, кажется Вашей группы нет в списках! ☹️")
+            bot.send_message(message.chat.id, "Проверьте корректность группы через /edit или обратитесь за помощью /help")
 
     # _____________________________________FEEDBACK_____________________________________
 
@@ -367,6 +384,8 @@ def back_to_info(message):
     commands(message)
 
 
+# ___________________________________ИЗМЕНЕНИЕ ГРУППЫ_______________________________________
+
 @bot.message_handler(commands=['edit'])
 def edit(message):
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
@@ -379,36 +398,34 @@ def edit(message):
     bot.register_next_step_handler(message, group_edit)
 
 
-# ___________________________________ИЗМЕНЕНИЕ ГРУППЫ_______________________________________
 def group_edit(message):
     if message.text == 'Нет':
         bot.send_message(message.chat.id, "Хорошо!")
     elif message.text == 'А какая у меня группа? 👉👈':
         bot.send_message(message.chat.id, "Так так так...")
         user_group = get_group_by_id(tg_id=message.from_user.id)
-        bot.send_message(message.chat.id, f"Ваша группа: {user_group.strip().upper()}")
+        bot.send_message(message.chat.id, f"Ваша группа: {user_group}")
     elif message.text == 'Да':
-        bot.send_message(message.chat.id, "Введите новую группу:")
-        bot.register_next_step_handler(message, group_edit_2)
-
+        markup = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
+        groups = disciplines_data.keys()
+        for group1, group2 in grouped(groups, 2):
+            markup.row(types.KeyboardButton(group1), types.KeyboardButton(group2))
+        bot.send_message(message.chat.id, "Выберите новую группу", reply_markup=markup)
+        bot.register_next_step_handler(message, group_update)
     else:
         bot.send_message(message.chat.id, "Пожалуйста, используйте кнопки 🙃️")
         edit(message)
 
 
-def group_edit_2(message):
-    global registration_counter
-    group = message.text.strip().upper()
-    if is_group_correct(group):
+def group_update(message):
+
+    group = message.text
+    if group in disciplines_data.keys():
         update_group(tg_id=message.from_user.id, group=group)
         bot.send_message(message.chat.id, f"Готово! \nТеперь Ваша группа: {group}")
-        registration_counter = 0
     else:
-        registration_counter += 1
-        if registration_counter >= 3:
-            bot.send_message(message.chat.id, f"Издеваешься? 😕")
-        bot.send_message(message.chat.id, f"Обрати внимание на формат: БМТX-XXБ(М) ⚠️")
-        bot.register_next_step_handler(message, group_edit_2)
+        bot.send_message(message.chat.id, "Пожалуйста, используйте кнопки 🙃️")
+        bot.register_next_step_handler(message, group_update)
 
 
 # ___________________________________МЕНЮ С КОМАНДАМИ_______________________________________
@@ -422,6 +439,9 @@ def commands(message):
 /help - помощь 
 /edit - изменить группу''',
                      parse_mode='markdown', reply_markup=types.ReplyKeyboardRemove())
+
+def grouped(iterable, n):
+    return zip(*[iter(iterable)]*n)
 
 
 bot.infinity_polling()
