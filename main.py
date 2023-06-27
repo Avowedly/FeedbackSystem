@@ -2,7 +2,6 @@ import telebot
 from telebot import types
 import json
 import sqlite3
-from re import match
 import datetime
 from contextlib import closing
 
@@ -32,7 +31,7 @@ def create_database():
         cursor.execute(
             'CREATE TABLE IF NOT EXISTS feedback (id int, datetime varchar(25) primary key, feedback varchar(500))')
         cursor.execute('CREATE TABLE IF NOT EXISTS forms (id int, datetime varchar(25) primary key, discipline varchar(25), \
-                                                      lection int, lector int, seminar int, seminarist int, comments varchar(500))')
+                                                      lec int, sem int, lab int, comments varchar(500))')
         connection.commit()
     connection.close()
 
@@ -45,8 +44,8 @@ def insert_field(table, args):
         if table == 'users':
             cursor.execute("INSERT INTO users (id, group_name) VALUES('%s', '%s')" % args)
         elif table == 'forms':
-            cursor.execute("INSERT INTO forms (id, datetime, discipline, lector, lection, seminar, seminarist, comments) \
-                                            VALUES ('%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s')" % args)
+            cursor.execute("INSERT INTO forms (id, datetime, discipline, lec, sem, lab, comments) \
+                                            VALUES ('%s', '%s', '%s', '%s', '%s', '%s', '%s')" % args)
         elif table == 'feedback':
             cursor.execute("INSERT INTO feedback (id, datetime, feedback) VALUES('%s', '%s', '%s')" % args)
         connection.commit()
@@ -103,17 +102,6 @@ def update_group(tg_id, group):
 
 # ______________________________Регистрация пользователя по группе__________________________
 
-# def is_group_correct(group):
-#     """
-#     Проверка корректности ввода группы
-#     """
-#     s = group.strip().upper()
-#     res = match(r'БМТ[1-5]-[1-8][1-3][Б, М]$', s)
-#     if res is None:
-#         return False
-#     else:
-#         return True
-
 def user_registration(message):
     """
     Регистрация пользователя по группе и id в телеграме
@@ -135,7 +123,7 @@ def user_registration(message):
         bot.register_next_step_handler(message, choose_department)
 
     else:
-        bot.send_message(message.chat.id, "Пожалуйста, используйте кнопки 🙃️")
+        bot.send_message(message.chat.id, "Используйте кнопки 🙃️")
         bot.register_next_step_handler(message, user_registration)
 
 def choose_department(message):
@@ -152,7 +140,7 @@ def choose_department(message):
         bot.register_next_step_handler(message, choose_semester)
 
     else:
-        bot.send_message(message.chat.id, "Пожалуйста, используйте кнопки 🙃️")
+        bot.send_message(message.chat.id, "Используйте кнопки 🙃️")
         bot.register_next_step_handler(message, choose_department)
 
 
@@ -170,7 +158,7 @@ def choose_semester(message):
         bot.register_next_step_handler(message, choose_group)
 
     else:
-        bot.send_message(message.chat.id, "Пожалуйста, используйте кнопки 🙃️")
+        bot.send_message(message.chat.id, "Используйте кнопки 🙃️")
         bot.register_next_step_handler(message, choose_semester)
 
 def choose_group(message):
@@ -183,7 +171,7 @@ def choose_group(message):
             insert_field(table='users', args=(message.from_user.id, group))
             bot.send_message(message.chat.id, f"Приятно познакомиться! 👋\nНажмите /start, чтобы начать ")
     else:
-        bot.send_message(message.chat.id, "Пожалуйста, используйте кнопки 🙃️")
+        bot.send_message(message.chat.id, "Используйте кнопки 🙃️")
         bot.register_next_step_handler(message, choose_group)
 
 
@@ -227,75 +215,8 @@ def start(message):
     Обратная связь - пользователь пишет обращение в свободной форме
     """
 
-    # _______________________________СЕМЕСТРОВЫЕ ФОРМЫ_____________________________________
+# _______________________________СЕМЕСТРОВЫЕ ФОРМЫ_____________________________________
     disciplines = ''
-
-    def semester_form(message):
-        """
-        Последовательный вывод вопросов из вопросника и прием ответов
-        """
-        if message.text == '/return':
-            bot.send_message(message.chat.id, "Опрос отменен 🔚", reply_markup=types.ReplyKeyboardRemove())
-            back_to_info(message)
-            return 0
-
-        nonlocal disciplines
-
-        if message.text not in disciplines:
-            bot.send_message(message.chat.id, "Пожалуйста, используйте кнопки 🙃️")
-            choose_semester_form(message)
-            return 0
-
-        requirement = ''
-        current_user_discipline = message.text
-        user_id = message.from_user.id
-        date = datetime.datetime.fromtimestamp(message.date).strftime('%Y-%m-%d %H:%M:%S')
-        arguments = [user_id, date, current_user_discipline]
-
-        def ask(message):
-            """
-            Функция для вывода вопроса в чат
-            Дополнительно использует requirement для проверки формата ответа пользователя далее
-            """
-            question = bot.send_message(message.chat.id, quest['text'])
-            nonlocal requirement
-            requirement = quest["requirements"]
-            bot.register_next_step_handler(question, read_answer)
-
-        def read_answer(answer):
-            """
-            Функция для чтения ответа пользователя
-            Проверяет корректность ввода в зависимости от требований в переменной requirement
-            Если ответ корректен по форме, то переходит к следующему вопросу,
-            если нет - задает вопрос, пока не будет получен корректный ответ
-            """
-            if answer.text == '/return':
-                bot.send_message(message.chat.id, "Данные не были сохранены ⚠️")
-                back_to_info(answer)
-                return 0
-
-            nonlocal quest
-            try:
-                if is_correct(answer, requirement):
-                    quest = next(questions)
-                    arguments.append(answer.text)
-                    ask(answer)
-                else:
-                    wrong_input(answer, requirement)
-                    ask(answer)
-            except StopIteration:
-                arguments.append(answer.text)
-                insert_field(table='forms', args=tuple(arguments))
-                bot.send_message(message.chat.id, "Спасибо за ответы! 🙏")
-                bot.send_message(465825972,
-                                 f"💬 *New Completed Form* for group: {get_group_by_id(tg_id=message.from_user.id)}",
-                                 parse_mode='markdown')
-                bot.send_message(message.chat.id, "Продолжим? /return для отмены")
-                choose_semester_form(message)
-
-        questions = (q for q in form_data.values())
-        quest = next(questions)
-        ask(message)
 
     def choose_semester_form(message):
         '''
@@ -322,6 +243,84 @@ def start(message):
         except KeyError:
             bot.send_message(message.chat.id, "Упс, кажется Вашей группы нет в списках! ☹️")
             bot.send_message(message.chat.id, "Проверьте корректность группы через /edit или обратитесь за помощью /help")
+
+
+    def semester_form(message):
+        """
+        Последовательный вывод вопросов из вопросника и прием ответов
+        """
+
+        if message.text == '/return':
+            bot.send_message(message.chat.id, "Опрос отменен 🔚", reply_markup=types.ReplyKeyboardRemove())
+            bot.register_next_step_handler(message, back_to_info)
+
+        elif message.text in disciplines:
+
+            current_discipline = message.text
+            user_id = message.from_user.id
+            date = datetime.datetime.fromtimestamp(message.date).strftime('%Y-%m-%d %H:%M:%S')
+            answers = [user_id, date, current_discipline]
+
+            questions = (q for q in form_data.values())
+            question = next(questions)
+            quest_type = question['type']
+            def ask(message):
+                """
+                Функция для вывода вопроса в чат
+                """
+                nonlocal quest_type
+                quest_type = question['type']
+                quest_text = question['text']
+                if quest_type == 'scale':
+                    markup = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
+                    for i in range(1, 11, 2):
+                        markup.row(types.KeyboardButton(str(i)), types.KeyboardButton(str(i+1)))
+                    markup.row('Такого вида занятий не было')
+                    bot.send_message(message.chat.id, quest_text, reply_markup=markup)
+                if quest_type == 'text':
+                    bot.send_message(message.chat.id, quest_text)
+                bot.register_next_step_handler(message, read_answer)
+
+            def read_answer(message):
+                """
+                Функция для чтения ответа пользователя
+                Проверяет корректность ввода в зависимости от требований в переменной requirement
+                Если ответ корректен по форме, то переходит к следующему вопросу,
+                если нет - задает вопрос, пока не будет получен корректный ответ
+                """
+                if message.text == '/return':
+                    bot.send_message(message.chat.id, "Данные не были сохранены ⚠️")
+                    bot.register_next_step_handler(message, back_to_info)
+                elif message.content_type == 'text' and (quest_type == 'text' or
+                                                         quest_type == 'scale' and
+                                                         (message.text in [str(i) for i in range(1, 11)] or
+                                                          message.text == 'Такого вида занятий не было')):
+                    try:
+                        nonlocal question
+                        if message.text == 'Такого вида занятий не было':
+                            answer = None
+                        else:
+                            answer = message.text
+                        answers.append(answer)
+                        question = next(questions)
+                        ask(message)
+                    except StopIteration:
+                        insert_field(table='forms', args=tuple(answers))
+                        bot.send_message(message.chat.id, "Спасибо за ответы! 🙏")
+                        bot.send_message(465825972,
+                                         f"💬 *New Completed Form* for group: {get_group_by_id(tg_id=message.from_user.id)}",
+                                         parse_mode='markdown')
+                        bot.send_message(message.chat.id, "Продолжим? /return для отмены")
+                        choose_semester_form(message)
+                else:
+                    bot.send_message(message.chat.id, "Используйте кнопки/текст 🙃️")
+                    bot.register_next_step_handler(message, read_answer)
+
+            ask(message)                                        # Запуск анкетирования
+
+        else:
+            bot.send_message(message.chat.id, "Используйте кнопки 🙃️")
+            bot.register_next_step_handler(message, semester_form)
 
     # _____________________________________FEEDBACK_____________________________________
 
@@ -355,47 +354,18 @@ def start(message):
     elif message.text == '/help':
         help(message)
 
+    elif message.text == '/start':
+        send_welcome(message)
+
     elif message.text == '/info':
         info(message)
 
     elif message.text == '/edit':
         edit(message)
 
-    # _____________________________________ПРОВЕРКИ___________________________________________
-    def is_correct(message, requirement):
-        """
-        Функция для проверки корректности ответа пользователя
-        Проверяет, что ответ представляет собой строку,
-        затем проверяет формат ответа, солгалсно переменной requirement
-        """
-        if message.content_type == 'text':
-            text = message.text
-            if requirement == 'scale':
-                if text.isdigit():
-                    x = int(text)
-                    if (x >= 1) and (x <= 10):
-                        return True
-                    else:
-                        return False
-                return False
-
-            if requirement == 'string':
-                return True
-        else:
-            return False
-
-    def wrong_input(message, requirement):
-        """
-        Функция для сообщению пользователю о некорректности ввода
-        дополнительно выводит пояснения, в каком формате необходим ответ
-        """
-        if message.content_type == 'text':
-            if requirement == 'scale':
-                bot.send_message(message.chat.id, 'Введите целое число от 1 до 10 🔢')
-            if requirement == 'string':
-                bot.send_message(message.chat.id, 'Используйте буквы и числа! 🔡')
-        else:
-            bot.send_message(message.chat.id, 'Используйте буквы и числа! 🔡')
+    else:
+        bot.send_message(message.chat.id, "Используйте кнопки или команды 🙃️")
+        bot.register_next_step_handler(message, start)
 
 
 # _____________________________________INFO, HELP, EDIT, RETURN___________________________________________
@@ -455,7 +425,7 @@ def group_edit(message):
         bot.send_message(message.chat.id, "Где Вы обучаетесь?", reply_markup=markup)
         bot.register_next_step_handler(message, user_registration)
     else:
-        bot.send_message(message.chat.id, "Пожалуйста, используйте кнопки 🙃️")
+        bot.send_message(message.chat.id, "Используйте кнопки 🙃️")
         bot.register_next_step_handler(message, group_edit)
 
 
@@ -472,8 +442,6 @@ def commands(message):
 ''',
                      parse_mode='markdown', reply_markup=types.ReplyKeyboardRemove())
 
-def grouped(iterable, n):
-    return zip(*[iter(iterable)]*n)
 
 
 bot.infinity_polling()
