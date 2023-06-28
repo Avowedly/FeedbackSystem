@@ -31,7 +31,7 @@ def create_database():
         cursor.execute(
             'CREATE TABLE IF NOT EXISTS feedback (id int, datetime varchar(25) primary key, feedback varchar(500))')
         cursor.execute('CREATE TABLE IF NOT EXISTS forms (id int, datetime varchar(25) primary key, discipline varchar(25), \
-                                                      lec int, sem int, lab int, comments varchar(500))')
+                                                      lec int, lecm int, sem int, semm int, lab int, labm int, comments varchar(500))')
         connection.commit()
     connection.close()
 
@@ -44,8 +44,8 @@ def insert_field(table, args):
         if table == 'users':
             cursor.execute("INSERT INTO users (id, group_name) VALUES('%s', '%s')" % args)
         elif table == 'forms':
-            cursor.execute("INSERT INTO forms (id, datetime, discipline, lec, sem, lab, comments) \
-                                            VALUES ('%s', '%s', '%s', '%s', '%s', '%s', '%s')" % args)
+            cursor.execute("INSERT INTO forms (id, datetime, discipline, lec, lecm, sem, semm, lab, labm, comments) \
+                                            VALUES ('%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s','%s','%s')" % args)
         elif table == 'feedback':
             cursor.execute("INSERT INTO feedback (id, datetime, feedback) VALUES('%s', '%s', '%s')" % args)
         connection.commit()
@@ -272,13 +272,13 @@ def start(message):
                 quest_type = question['type']
                 quest_text = question['text']
                 if quest_type == 'scale':
-                    markup = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
+                    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
                     for i in range(1, 11, 2):
                         markup.row(types.KeyboardButton(str(i)), types.KeyboardButton(str(i+1)))
                     markup.row('Такого вида занятий не было')
                     bot.send_message(message.chat.id, quest_text, reply_markup=markup)
                 if quest_type == 'text':
-                    bot.send_message(message.chat.id, quest_text)
+                    bot.send_message(message.chat.id, quest_text, reply_markup=types.ReplyKeyboardRemove())
                 bot.register_next_step_handler(message, read_answer)
 
             def read_answer(message):
@@ -298,10 +298,10 @@ def start(message):
                     try:
                         nonlocal question
                         if message.text == 'Такого вида занятий не было':
-                            answer = None
+                            question = next(questions)
+                            answers.extend([None, None])
                         else:
-                            answer = message.text
-                        answers.append(answer)
+                            answers.append(message.text)
                         question = next(questions)
                         ask(message)
                     except StopIteration:
