@@ -1,12 +1,16 @@
 {
   "question1":
-  {"text": "Оцените лекции по шкале 1-10:", "requirements": "scale"},
+  {"text": "Оцените лекции", "type": "scale"},
   "question2":
-  {"text": "Оцените лектора по шкале 1-10:", "requirements": "scale"},
+  {"text": "Оцените лектора", "type": "scale"},
   "question3":
-  {"text": "Оцените семинары по шкале 1-10:", "requirements": "scale"},
+  {"text": "Оцените семинары", "type": "scale"},
   "question4":
-  {"text": "Оцените семинариста по шкале 1-10:", "requirements": "scale"},
+  {"text": "Оцените семинариста", "type": "scale"},
   "question5":
-  {"text": "Ваши комментарии:", "requirements": "string"}
+  {"text": "Оцените лабораторные работы", "type": "scale"},
+  "question6":
+  {"text": "Оцените преподавателя на лабораторных работах", "type": "scale"},
+  "question7":
+  {"text": "Ваши комментарии:", "type": "text"}
 }
