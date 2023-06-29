@@ -2,15 +2,19 @@
   "question1":
   {"text": "Оцените лекции", "type": "scale"},
   "question2":
-  {"text": "Оцените лектора", "type": "scale"},
+  {"text": "Оцените работу лектора", "type": "scale"},
   "question3":
   {"text": "Оцените семинары", "type": "scale"},
   "question4":
-  {"text": "Оцените семинариста", "type": "scale"},
+  {"text": "Оцените работу семинариста", "type": "scale"},
   "question5":
   {"text": "Оцените лабораторные работы", "type": "scale"},
   "question6":
-  {"text": "Оцените преподавателя на лабораторных работах", "type": "scale"},
+  {"text": "Оцените работу преподавателя на лабораторных", "type": "scale"},
   "question7":
+  {"text": "Оцените курсовую работу (командный проект)", "type": "scale"},
+  "question8":
+  {"text": "Оцените работу руководителя курсовой", "type": "scale"},
+  "question9":
   {"text": "Ваши комментарии:", "type": "text"}
 }

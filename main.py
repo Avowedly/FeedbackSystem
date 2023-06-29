@@ -15,6 +15,8 @@ with open("disciplines.json", 'r', encoding="UTF-8") as file:
     disciplines_data = json.load(file)
 
 bot = telebot.TeleBot(token)
+
+admin_id = 465825972
 database_name = 'feedback.sql'
 groups = disciplines_data.keys()
 degree = ''
@@ -27,11 +29,40 @@ def create_database():
     """
     connection = sqlite3.connect(database_name)
     with closing(connection.cursor()) as cursor:
-        cursor.execute('CREATE TABLE IF NOT EXISTS users (id int primary key, group_name varchar(10))')
-        cursor.execute(
-            'CREATE TABLE IF NOT EXISTS feedback (id int, datetime varchar(25) primary key, feedback varchar(500))')
-        cursor.execute('CREATE TABLE IF NOT EXISTS forms (id int, datetime varchar(25) primary key, discipline varchar(25), \
-                                                      lec int, lecm int, sem int, semm int, lab int, labm int, comments varchar(500))')
+
+        users = '''CREATE TABLE IF NOT EXISTS users 
+        (
+            id int primary key, 
+            group_name varchar(10)
+        )'''
+
+        feedback = '''CREATE TABLE IF NOT EXISTS feedback 
+        (
+            id int, 
+            datetime varchar(25) primary key, 
+            feedback varchar(500)
+        )
+        '''
+
+        forms = '''CREATE TABLE IF NOT EXISTS forms 
+        (
+            id int, datetime varchar(25) primary key, 
+            discipline varchar(25), 
+            lec int, 
+            lecm int, 
+            sem int, 
+            semm int, 
+            lab int, 
+            labm int, 
+            proj int,
+            projm int,
+            comments varchar(500)
+        )
+        '''
+
+        cursor.execute(users)
+        cursor.execute(forms)
+        cursor.execute(feedback)
         connection.commit()
     connection.close()
 
@@ -41,13 +72,48 @@ def insert_field(table, args):
     """
     connection = sqlite3.connect(database_name)
     with closing(connection.cursor()) as cursor:
+
+        users = '''INSERT INTO users 
+        (
+            id, 
+            group_name
+        ) 
+        VALUES('%s', '%s')
+        '''
+
+        feedback = '''INSERT INTO feedback 
+        (
+            id, 
+            datetime, 
+            feedback
+        ) 
+        VALUES('%s', '%s', '%s')
+        '''
+
+        forms = '''INSERT INTO forms 
+        (
+            id, 
+            datetime, 
+            discipline, 
+            lec, 
+            lecm, 
+            sem, 
+            semm, 
+            lab, 
+            labm, 
+            proj, 
+            projm, 
+            comments
+        ) 
+        VALUES ('%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s','%s','%s','%s','%s')
+        '''
+
         if table == 'users':
-            cursor.execute("INSERT INTO users (id, group_name) VALUES('%s', '%s')" % args)
+            cursor.execute(users % args)
         elif table == 'forms':
-            cursor.execute("INSERT INTO forms (id, datetime, discipline, lec, lecm, sem, semm, lab, labm, comments) \
-                                            VALUES ('%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s','%s','%s')" % args)
+            cursor.execute(forms % args)
         elif table == 'feedback':
-            cursor.execute("INSERT INTO feedback (id, datetime, feedback) VALUES('%s', '%s', '%s')" % args)
+            cursor.execute(feedback % args)
         connection.commit()
     connection.close()
 
@@ -193,6 +259,9 @@ def send_welcome(message):
         button2 = types.KeyboardButton('✍️ Обратная связь')
         markup.row(button1)
         markup.row(button2)
+        if message.from_user.id == admin_id :
+            button3 = types.KeyboardButton('💽 База данных')
+            markup.row(button3)
         bot.send_message(message.chat.id, f"Привет! Чем могу помочь? 💁🏻", reply_markup=markup)
         bot.register_next_step_handler(message, start)
 
@@ -289,7 +358,7 @@ def start(message):
                 если нет - задает вопрос, пока не будет получен корректный ответ
                 """
                 if message.text == '/return':
-                    bot.send_message(message.chat.id, "Данные не были сохранены ⚠️")
+                    bot.send_message(message.chat.id, "Данные не были сохранены ⚠️", reply_markup=types.ReplyKeyboardRemove())
                     bot.register_next_step_handler(message, back_to_info)
                 elif message.content_type == 'text' and (quest_type == 'text' or
                                                          quest_type == 'scale' and
@@ -319,7 +388,7 @@ def start(message):
             ask(message)                                        # Запуск анкетирования
 
         else:
-            bot.send_message(message.chat.id, "Используйте кнопки 🙃️")
+            bot.send_message(message.chat.id, "Используйте кнопки 🙃️ \n/return для отмены опроса")
             bot.register_next_step_handler(message, semester_form)
 
     # _____________________________________FEEDBACK_____________________________________
@@ -350,6 +419,9 @@ def start(message):
         bot.send_message(message.chat.id, "Ваши замечания/предложения: ️")
         bot.register_next_step_handler(message, read_feedback)
 
+    elif message.text == '💽 База данных' and message.from_user.id == admin_id:
+        with open('feedback.sql', 'rb') as doc:
+            bot.send_document(admin_id, doc)
 
     elif message.text == '/help':
         help(message)
