@@ -259,9 +259,8 @@ def send_welcome(message):
         button2 = types.KeyboardButton('✍️ Обратная связь')
         markup.row(button1)
         markup.row(button2)
-        if message.from_user.id == admin_id :
-            button3 = types.KeyboardButton('💽 База данных')
-            markup.row(button3)
+        if message.from_user.id == admin_id:
+            markup.row(types.KeyboardButton('💽 База данных'))
         bot.send_message(message.chat.id, f"Привет! Чем могу помочь? 💁🏻", reply_markup=markup)
         bot.register_next_step_handler(message, start)
 
