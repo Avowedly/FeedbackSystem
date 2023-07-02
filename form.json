@@ -1,18 +1,18 @@
 {
   "question1":
-  {"text": "Оцените лекции", "type": "scale"},
+  {"text": "Оцените лекции", "type": "scale_type"},
   "question2":
   {"text": "Оцените работу лектора", "type": "scale"},
   "question3":
-  {"text": "Оцените семинары", "type": "scale"},
+  {"text": "Оцените семинары", "type": "scale_type"},
   "question4":
   {"text": "Оцените работу семинариста", "type": "scale"},
   "question5":
-  {"text": "Оцените лабораторные работы", "type": "scale"},
+  {"text": "Оцените лабораторные работы", "type": "scale_type"},
   "question6":
   {"text": "Оцените работу преподавателя на лабораторных", "type": "scale"},
   "question7":
-  {"text": "Оцените курсовую работу (командный проект)", "type": "scale"},
+  {"text": "Оцените курсовую работу (командный проект)", "type": "scale_type"},
   "question8":
   {"text": "Оцените работу руководителя курсовой", "type": "scale"},
   "question9":
