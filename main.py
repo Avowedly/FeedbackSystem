@@ -5,6 +5,7 @@ import sqlite3
 import datetime
 from dataclasses import dataclass, field
 from contextlib import closing
+import pandas as pd
 
 with open("token.txt", 'r') as file:
     token = file.readline()
@@ -19,6 +20,8 @@ bot = telebot.TeleBot(token)
 
 admin_id = 465825972
 database_name = 'feedback.sql'
+teachers_data = 'teachers.xlsx'
+
 groups = disciplines_data.keys()
 
 
@@ -41,11 +44,11 @@ class User:
             markup = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
 
             if self.degree == 'Бакалавриат':
-                for i in range(1, 3):
-                    markup.row(types.KeyboardButton(f'БМТ{i}'))
+                markup.row(types.KeyboardButton('БМТ1'), types.KeyboardButton('БМТ2'))
             elif self.degree == 'Магистратура':
-                for i in range(1, 6):
-                    markup.row(types.KeyboardButton(f'БМТ{i}'))
+                markup.row(types.KeyboardButton('БМТ1'), types.KeyboardButton('БМТ2'))
+                markup.row(types.KeyboardButton('БМТ3'), types.KeyboardButton('БМТ4'))
+                markup.row(types.KeyboardButton('БМТ5'))
 
             bot.send_message(message.chat.id, "Выберите кафедру", reply_markup=markup)
             bot.register_next_step_handler(message, self.choose_department)
@@ -132,7 +135,7 @@ class User:
             bot.send_message(message.chat.id, "Хорошо!")
         elif message.text == 'А какая у меня группа? 👉👈':
             bot.send_message(message.chat.id, "Так так так...")
-            bot.send_message(message.chat.id, f"Ваша группа: {self.group}")
+            bot.send_message(message.chat.id, f"Ваша группа: {database.get_group_by_id()}")
         elif message.text == 'Да':
             markup = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
             button1 = types.KeyboardButton("Бакалавриат")
@@ -146,6 +149,7 @@ class User:
             bot.register_next_step_handler(message, self.group_edit)
 
 
+@dataclass
 class Database:
     id: int = 0
 
@@ -182,6 +186,9 @@ class Database:
                 comments varchar(500)
             )
             '''
+
+            teachers = pd.read_excel(teachers_data)
+            teachers.to_sql('teachers', connection, index=False, if_exists="replace")
 
             cursor.execute(users)
             cursor.execute(forms)
@@ -245,11 +252,15 @@ class Feedback:
             bot.register_next_step_handler(message, feedback.read_feedback)
 
 
-@dataclass()
+@dataclass
 class SemesterForm:
     id: int = 0
     datetime: str = None
     discipline: str = None
+
+    question: dict = field(default_factory=dict)
+    questions: iter = field(default_factory=list)
+
     rates: list = field(default_factory=list)
     empty_disciplines: list = field(default_factory=list)
 
@@ -273,7 +284,6 @@ class SemesterForm:
         ) 
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
-
             data_tuple = (self.id, self.datetime, self.discipline) + tuple(self.rates)
             cursor.execute(sql_script, data_tuple)
             connection.commit()
@@ -292,24 +302,60 @@ class SemesterForm:
         connection.close()
         return set(filled_disciplines)
 
+    def list_of_teachers(self, semester):
+        connection = sqlite3.connect(database_name)
+        with closing(connection.cursor()) as cursor:
+            sql_script = "SELECT * FROM teachers WHERE Предмет = ? AND Семестр = ?"
+            data_tuple = (self.discipline, semester)
+            cursor.execute(sql_script, data_tuple)
+            teachers = cursor.fetchone()
+        connection.close()
+
+        if teachers is None:
+            return None
+        else:
+            doubled_teachers = [[t, t] for t in teachers[2:]]      # Удвоение полученных типо занятий (т.к. 2 оценки на каждый тип)
+            flat_teachers = [item for sublist in doubled_teachers for item in sublist] # Развертка в один список
+            flat_teachers.append("Комментарии")                                       # Дополнительное поле для комментариев
+            return flat_teachers
+
+    def end_of_form(self, message):
+        self.add_filled_form()
+        self.rates = []
+        bot.send_message(message.chat.id, "Спасибо за ответы! 🙏 \nПродолжим? /return для отмены")
+        bot.send_message(465825972,
+                         f"💬 *New Completed Form* for group: {database.get_group_by_id()}",
+                         parse_mode='markdown')
+        self.choose_semester_form(message)
+
+    @staticmethod
+    def pairwise(iterable):
+        "s -> (s0, s1), (s2, s3), (s4, s5), ..."
+        a = iter(iterable)
+        return zip(a, a)
+
     def choose_semester_form(self, message):
         group = database.get_group_by_id()
         try:
             disciplines = set(disciplines_data[group])
             filled_disciplines = self.get_filled_disciplines()
             self.empty_disciplines = list(disciplines.difference(filled_disciplines))
+            num_of_empty_disciplines = len(self.empty_disciplines)
 
-            if len(self.empty_disciplines) == 0:
+            if num_of_empty_disciplines == 0:
                 bot.send_message(message.chat.id,
                                  "Похоже Вы заполнили обратную связь по всем предметам! 🎉\nБольшое спасибо за уделенное время 🙏")
             else:
                 markup = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
-                for discipline in self.empty_disciplines:
-                    markup.row(types.KeyboardButton(discipline))
+                for d1, d2 in self.pairwise(self.empty_disciplines):
+                    markup.row(types.KeyboardButton(d1), types.KeyboardButton(d2))
+                if num_of_empty_disciplines%2 == 1:
+                    markup.row(types.KeyboardButton(self.empty_disciplines[-1]))
+
                 bot.send_message(message.chat.id, "Выберите предмет!", reply_markup=markup)
                 bot.register_next_step_handler(message, self.semester_form)
         except KeyError:
-            bot.send_message(message.chat.id, "Упс, кажется Вашей группы нет в списках! ☹️")
+            bot.send_message(message.chat.id, "Ooops, кажется Вашей группы нет в списках! ☹️")
             bot.send_message(message.chat.id,
                              "Проверьте корректность группы через /edit или обратитесь за помощью /help")
 
@@ -320,72 +366,73 @@ class SemesterForm:
 
         elif message.text in self.empty_disciplines:
 
-            form.datetime = datetime.datetime.fromtimestamp(message.date).strftime('%Y-%m-%d %H:%M:%S')
-            form.discipline = message.text
+            self.datetime = datetime.datetime.fromtimestamp(message.date).strftime('%Y-%m-%d %H:%M:%S')
+            self.discipline = message.text
 
-            questions = (q for q in form_data.values())
-            question = next(questions)
-            quest_type = question['type']
+            group = database.get_group_by_id()
+            teachers = self.list_of_teachers(semester=group[5])   # Получение списка преподавателей по семестру и дисциплине
+            print(teachers)
 
-            def ask(message):
-                nonlocal quest_type
-                quest_type = question['type']
-                quest_text = question['text']
+            if teachers is None:
+                bot.send_message(message.chat.id, "Ooops, кажется данного предмета нет в базе! ☹️ \nУже сообщил о проблеме, скоро добавим \nВыберите другой предмет")
+                bot.send_message(465825972,
+                                 f"❗ Отсутствует дисциплина *{message.text}* у группы *{group}*",
+                                 parse_mode='markdown')
+                bot.register_next_step_handler(message, self.semester_form)
 
-                if quest_type == 'scale_type':
-                    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-                    markup.row('Такого вида занятий не было')
-                    for i in range(1, 11, 2):
-                        markup.row(types.KeyboardButton(str(i)), types.KeyboardButton(str(i+1)))
-                    bot.send_message(message.chat.id, quest_text, reply_markup=markup)
+            else:
+                for i, q in enumerate(form_data.keys()):
+                    form_data[q]['teacher'] = teachers[i]
 
-                elif quest_type == 'scale':
-                    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-                    for i in range(1, 11, 2):
-                        markup.row(types.KeyboardButton(str(i)), types.KeyboardButton(str(i+1)))
-                    bot.send_message(message.chat.id, quest_text, reply_markup=markup)
-
-                elif quest_type == 'text':
-                    bot.send_message(message.chat.id, quest_text, reply_markup=types.ReplyKeyboardRemove())
-                bot.register_next_step_handler(message, read_answer)
-
-            def read_answer(message):
-                if message.text == '/return':
-                    bot.send_message(message.chat.id,
-                                     "Данные не были сохранены ⚠️",
-                                     reply_markup=types.ReplyKeyboardRemove())
-                    bot.register_next_step_handler(message, back_to_commands)
-                elif message.content_type == 'text' and (quest_type == 'text' or
-                                                         (quest_type == 'scale' or quest_type == 'scale_type') and
-                                                         (message.text in [str(i) for i in range(1, 11)] or
-                                                          message.text == 'Такого вида занятий не было')):
-                    try:
-                        nonlocal question
-                        if message.text == 'Такого вида занятий не было':
-                            question = next(questions)
-                            form.rates.extend([None, None])
-                        else:
-                            form.rates.append(message.text)
-                        question = next(questions)
-                        ask(message)
-                    except StopIteration:
-                        form.add_filled_form()
-                        form.rates = []
-                        bot.send_message(message.chat.id, "Спасибо за ответы! 🙏")
-                        bot.send_message(465825972,
-                                         f"💬 *New Completed Form* for group: {database.get_group_by_id()}",
-                                         parse_mode='markdown')
-                        bot.send_message(message.chat.id, "Продолжим? /return для отмены")
-                        self.choose_semester_form(message)
-                else:
-                    bot.send_message(message.chat.id, "Используйте кнопки/текст 🙃️")
-                    bot.register_next_step_handler(message, read_answer)
-
-            ask(message)                                        # Запуск анкетирования
+                self.questions = iter(form_data.values())
+                self.question = next(self.questions)
+                self.ask(message)
 
         else:
             bot.send_message(message.chat.id, "Используйте кнопки 🙃️ \n/return для отмены опроса")
             bot.register_next_step_handler(message, self.semester_form)
+
+    def ask(self, message):
+
+        if self.question['teacher'] is not None:
+            if self.question['type'] == 'scale':
+                markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+                for i in range(1, 11, 2):
+                    markup.row(types.KeyboardButton(str(i)), types.KeyboardButton(str(i+1)))
+                bot.send_message(message.chat.id, self.question['text'] + f'\nПреподаватель: {self.question["teacher"]}', reply_markup=markup)
+
+            elif self.question['type'] == 'text':
+                bot.send_message(message.chat.id, self.question['text'], reply_markup=types.ReplyKeyboardRemove())
+            bot.register_next_step_handler(message, self.read_answer)
+        else:
+            try:
+                form.rates.extend([None, None])
+                next(self.questions)
+                self.question = next(self.questions)
+                self.ask(message)
+            except StopIteration:
+                self.end_of_form(message)
+
+
+    def read_answer(self, message):
+        if message.text == '/return':
+            bot.send_message(message.chat.id,
+                             "Данные не были сохранены ⚠️",
+                             reply_markup=types.ReplyKeyboardRemove())
+            bot.register_next_step_handler(message, back_to_commands)
+        elif message.content_type == 'text' and (self.question['type'] == 'text' or
+                                                 self.question['type'] == 'scale' and
+                                                 message.text in [str(i) for i in range(1, 11)]):
+            try:
+                form.rates.append(message.text)
+                self.question = next(self.questions)
+                self.ask(message)
+            except StopIteration:
+                self.end_of_form(message)
+
+        else:
+            bot.send_message(message.chat.id, "Используйте кнопки 🙃️ \n/return для отмены опроса")
+            bot.register_next_step_handler(message, self.read_answer)
 
 
 user = User()
@@ -422,8 +469,7 @@ def send_welcome(message):
         markup = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
         button1 = types.KeyboardButton("Бакалавриат")
         button2 = types.KeyboardButton("Магистратура")
-        markup.row(button1)
-        markup.row(button2)
+        markup.row(button1, button2)
         bot.send_message(message.chat.id,
                          "Привет! Кажется мы еще не знакомы. \nГде Вы обучаетесь?",
                          reply_markup=markup)
