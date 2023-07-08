@@ -18,7 +18,7 @@ with open("disciplines.json", 'r', encoding="UTF-8") as file:
 
 bot = telebot.TeleBot(token)
 
-admin_id = 465825972
+admin_ids = [465825972]
 database_name = 'feedback.sql'
 teachers_data = 'teachers.xlsx'
 
@@ -27,9 +27,8 @@ groups = disciplines_data.keys()
 
 @dataclass
 class User:
-    id: int = 0
+    user_id: int
     group: str = None
-
     degree: str = None
     department: str = None
     semester: str = None
@@ -37,11 +36,9 @@ class User:
     def registration(self, message):
 
         degree = message.text
-        self.id = message.from_user.id
-
         if degree in ['Бакалавриат', 'Магистратура']:
             self.degree = degree
-            markup = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
+            markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
 
             if self.degree == 'Бакалавриат':
                 markup.row(types.KeyboardButton('БМТ1'), types.KeyboardButton('БМТ2'))
@@ -61,7 +58,7 @@ class User:
         department = message.text
         if department in ['БМТ1', 'БМТ2', 'БМТ3', 'БМТ4', 'БМТ5']:
             self.department = department
-            markup = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
+            markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
 
             n = 9 if self.degree[0] == 'Б' else 5
             for i in range(1, n, 2):
@@ -112,9 +109,9 @@ class User:
         connection = sqlite3.connect(database_name)
         with closing(connection.cursor()) as cursor:
 
-            sql_script = "INSERT INTO users (id, group_name) VALUES(?, ?)"
+            sql_script = "INSERT INTO users (user_id, group_name) VALUES(?, ?)"
 
-            data_tuple = (self.id, self.group)
+            data_tuple = (self.user_id, self.group)
             cursor.execute(sql_script, data_tuple)
             connection.commit()
         connection.close()
@@ -123,35 +120,16 @@ class User:
         connection = sqlite3.connect(database_name)
         with closing(connection.cursor()) as cursor:
 
-            sql_script = "UPDATE users SET group_name = ? WHERE id = ?"
+            sql_script = "UPDATE users SET group_name = ? WHERE user_id = ?"
 
-            data_tuple = (self.group, self.id)
+            data_tuple = (self.group, self.user_id)
             cursor.execute(sql_script, data_tuple)
             connection.commit()
         connection.close()
 
-    def group_edit(self, message):
-        if message.text == 'Нет':
-            bot.send_message(message.chat.id, "Хорошо!")
-        elif message.text == 'А какая у меня группа? 👉👈':
-            bot.send_message(message.chat.id, "Так так так...")
-            bot.send_message(message.chat.id, f"Ваша группа: {database.get_group_by_id()}")
-        elif message.text == 'Да':
-            markup = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
-            button1 = types.KeyboardButton("Бакалавриат")
-            button2 = types.KeyboardButton("Магистратура")
-            markup.row(button1)
-            markup.row(button2)
-            bot.send_message(message.chat.id, "Где Вы обучаетесь?", reply_markup=markup)
-            bot.register_next_step_handler(message, self.registration)
-        else:
-            bot.send_message(message.chat.id, "Используйте кнопки 🙃️")
-            bot.register_next_step_handler(message, self.group_edit)
-
 
 @dataclass
 class Database:
-    id: int = 0
 
     @staticmethod
     def create():
@@ -159,21 +137,23 @@ class Database:
         with closing(connection.cursor()) as cursor:
             users = '''CREATE TABLE IF NOT EXISTS users 
             (
-                id int primary key, 
+                user_id int primary key, 
                 group_name varchar(10)
             )'''
 
             feedback = '''CREATE TABLE IF NOT EXISTS feedback 
             (
-                id int, 
-                datetime varchar(25) primary key, 
+                id int primary key,
+                user_id int, 
+                datetime varchar(25), 
                 feedback varchar(500)
             )
             '''
 
             forms = '''CREATE TABLE IF NOT EXISTS forms 
             (
-                id int, datetime varchar(25) primary key, 
+                user_id int, 
+                datetime varchar(25), 
                 discipline varchar(25), 
                 lec int, 
                 lecm int, 
@@ -183,7 +163,8 @@ class Database:
                 labm int, 
                 proj int,
                 projm int,
-                comments varchar(500)
+                comments varchar(500),
+                PRIMARY KEY (user_id, discipline)
             )
             '''
 
@@ -200,28 +181,58 @@ class Database:
     def get_ids():
         connection = sqlite3.connect(database_name)
         with closing(connection.cursor()) as cursor:
-            cursor.execute("SELECT id FROM users")
+            cursor.execute("SELECT user_id FROM users")
             users_ids = cursor.fetchall()
             users_ids = [i[0] for i in users_ids]
         connection.close()
         return users_ids
 
-    def get_group_by_id(self):
+    def get_group_by_id(self, user_id):
         connection = sqlite3.connect(database_name)
         with closing(connection.cursor()) as cursor:
 
-            sql_script = "SELECT group_name FROM users WHERE id = ?"
+            sql_script = "SELECT group_name FROM users WHERE user_id = ?"
 
-            data_tuple = (self.id, )
+            data_tuple = (user_id, )
             cursor.execute(sql_script, data_tuple)
             group = cursor.fetchone()[0]
         connection.close()
         return group
 
+    def group_edit(self, message):
+        if message.text == 'Нет':
+            bot.send_message(message.chat.id, "Хорошо!")
+        elif message.text == 'А какая у меня группа? 👉👈':
+            bot.send_message(message.chat.id, "Так так так...")
+            bot.send_message(message.chat.id, f"Ваша группа: {self.get_group_by_id(user_id=message.from_user.id)}")
+        elif message.text == 'Да':
+            user = User(user_id=message.from_user.id)
+            markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+            button1 = types.KeyboardButton("Бакалавриат")
+            button2 = types.KeyboardButton("Магистратура")
+            markup.row(button1)
+            markup.row(button2)
+            bot.send_message(message.chat.id, "Где Вы обучаетесь?", reply_markup=markup)
+            bot.register_next_step_handler(message, user.registration)
+        else:
+            bot.send_message(message.chat.id, "Используйте кнопки 🙃️")
+            bot.register_next_step_handler(message, self.group_edit)
+
+    def delete_forms(self, user_id):
+        connection = sqlite3.connect(database_name)
+        with closing(connection.cursor()) as cursor:
+
+            sql_script = "DELETE from forms where user_id = ?"
+
+            data_tuple = (user_id, )
+            cursor.execute(sql_script, data_tuple)
+            connection.commit()
+        connection.close()
+
 
 @dataclass
 class Feedback:
-    id: int = 0
+    user_id: int
     datetime: str = None
     feedback: str = None
 
@@ -229,19 +240,18 @@ class Feedback:
         connection = sqlite3.connect(database_name)
         with closing(connection.cursor()) as cursor:
 
-            sql_script = "INSERT INTO feedback (id, datetime, feedback) VALUES(?, ?, ?)"
+            sql_script = "INSERT INTO feedback (user_id, datetime, feedback) VALUES(?, ?, ?)"
 
-            data_tuple = (self.id, self.datetime, self.feedback)
+            data_tuple = (self.user_id, self.datetime, self.feedback)
             cursor.execute(sql_script, data_tuple)
             connection.commit()
         connection.close()
 
-    @staticmethod
-    def read_feedback(message):
+    def read_feedback(self, message):
         if message.content_type == 'text':
-            feedback.datetime = datetime.datetime.fromtimestamp(message.date).strftime('%Y-%m-%d %H:%M:%S')
-            feedback.feedback = message.text
-            feedback.add_feedback()
+            self.datetime = datetime.datetime.fromtimestamp(message.date).strftime('%Y-%m-%d %H:%M:%S')
+            self.feedback = message.text
+            self.add_feedback()
 
             bot.send_message(465825972, f"💬 *New Feedback*: {message.text}", parse_mode='markdown')
             bot.send_message(message.chat.id, "Спасибо за обратную связь! 🙏")
@@ -249,14 +259,17 @@ class Feedback:
         else:
             bot.send_message(message.chat.id, "Словами, пожалуйста 🙃")
             bot.send_message(message.chat.id, "Ваши замечания/предложения: ")
-            bot.register_next_step_handler(message, feedback.read_feedback)
+            bot.register_next_step_handler(message, self.read_feedback)
 
 
 @dataclass
 class SemesterForm:
-    id: int = 0
+    user_id: int
     datetime: str = None
     discipline: str = None
+    term: str = None
+
+    counter: int = 0
 
     question: dict = field(default_factory=dict)
     questions: iter = field(default_factory=list)
@@ -269,7 +282,7 @@ class SemesterForm:
         with closing(connection.cursor()) as cursor:
             sql_script = """INSERT INTO forms 
         (
-            id, 
+            user_id, 
             datetime, 
             discipline, 
             lec, 
@@ -284,7 +297,7 @@ class SemesterForm:
         ) 
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
-            data_tuple = (self.id, self.datetime, self.discipline) + tuple(self.rates)
+            data_tuple = (self.user_id, self.datetime, self.discipline) + tuple(self.rates)
             cursor.execute(sql_script, data_tuple)
             connection.commit()
         connection.close()
@@ -293,20 +306,21 @@ class SemesterForm:
         connection = sqlite3.connect(database_name)
         with closing(connection.cursor()) as cursor:
 
-            sql_script = "SELECT discipline FROM forms WHERE id = ?"
+            sql_script = "SELECT discipline FROM forms WHERE user_id = ?"
 
-            data_tuple = (self.id, )
+            data_tuple = (self.user_id, )
             cursor.execute(sql_script, data_tuple)
             data = cursor.fetchall()
             filled_disciplines = [i[0] for i in data]
         connection.close()
         return set(filled_disciplines)
 
-    def list_of_teachers(self, semester):
+    @staticmethod
+    def list_of_teachers(discipline, semester):
         connection = sqlite3.connect(database_name)
         with closing(connection.cursor()) as cursor:
             sql_script = "SELECT * FROM teachers WHERE Предмет = ? AND Семестр = ?"
-            data_tuple = (self.discipline, semester)
+            data_tuple = (discipline, semester)
             cursor.execute(sql_script, data_tuple)
             teachers = cursor.fetchone()
         connection.close()
@@ -324,8 +338,9 @@ class SemesterForm:
         self.rates = []
         bot.send_message(message.chat.id, "Спасибо за ответы! 🙏 \nПродолжим? /return для отмены")
         bot.send_message(465825972,
-                         f"💬 *New Completed Form* for group: {database.get_group_by_id()}",
+                         f"💬 *New Completed Form* for group: {database.get_group_by_id(user_id=message.from_user.id)}",
                          parse_mode='markdown')
+        message.text = self.term
         self.choose_semester_form(message)
 
     @staticmethod
@@ -334,10 +349,32 @@ class SemesterForm:
         a = iter(iterable)
         return zip(a, a)
 
+    def choose_term(self, message):
+
+        group = database.get_group_by_id(user_id=message.from_user.id)
+        if group[3] == '1' and group[-1] == 'М':
+            markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+            markup.row(types.KeyboardButton('Терм 1'), types.KeyboardButton('Терм 2'))
+            bot.send_message(message.chat.id, "Выберите терм", reply_markup=markup)
+            bot.register_next_step_handler(message, self.choose_semester_form)
+        else:
+            self.choose_semester_form(message)
+
     def choose_semester_form(self, message):
-        group = database.get_group_by_id()
-        try:
-            disciplines = set(disciplines_data[group])
+        if message.text == '/return':
+            bot.send_message(message.chat.id, "Опрос отменен 🔚", reply_markup=types.ReplyKeyboardRemove())
+            bot.register_next_step_handler(message, start)
+
+        elif message.text in ['Терм 1', 'Терм 2', '📑 Опрос по дисциплинам']:
+            self.term = message.text
+            group = database.get_group_by_id(user_id=message.from_user.id)
+            if message.text == 'Терм 1':
+                disciplines = set(disciplines_data[group]['term 1'])
+            elif message.text == 'Терм 2':
+                disciplines = set(disciplines_data[group]['term 2'])
+            else:
+                disciplines = set(disciplines_data[group])
+
             filled_disciplines = self.get_filled_disciplines()
             self.empty_disciplines = list(disciplines.difference(filled_disciplines))
             num_of_empty_disciplines = len(self.empty_disciplines)
@@ -346,7 +383,7 @@ class SemesterForm:
                 bot.send_message(message.chat.id,
                                  "Похоже Вы заполнили обратную связь по всем предметам! 🎉\nБольшое спасибо за уделенное время 🙏")
             else:
-                markup = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
+                markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
                 for d1, d2 in self.pairwise(self.empty_disciplines):
                     markup.row(types.KeyboardButton(d1), types.KeyboardButton(d2))
                 if num_of_empty_disciplines%2 == 1:
@@ -354,27 +391,27 @@ class SemesterForm:
 
                 bot.send_message(message.chat.id, "Выберите предмет!", reply_markup=markup)
                 bot.register_next_step_handler(message, self.semester_form)
-        except KeyError:
-            bot.send_message(message.chat.id, "Ooops, кажется Вашей группы нет в списках! ☹️")
-            bot.send_message(message.chat.id,
-                             "Проверьте корректность группы через /edit или обратитесь за помощью /help")
+
+        else:
+            bot.send_message(message.chat.id, "Используйте кнопки 🙃️ \n/return для отмены опроса")
+            bot.register_next_step_handler(message, self.choose_semester_form)
 
     def semester_form(self, message):
         if message.text == '/return':
             bot.send_message(message.chat.id, "Опрос отменен 🔚", reply_markup=types.ReplyKeyboardRemove())
-            bot.register_next_step_handler(message, back_to_commands)
+            bot.register_next_step_handler(message, start)
 
         elif message.text in self.empty_disciplines:
 
             self.datetime = datetime.datetime.fromtimestamp(message.date).strftime('%Y-%m-%d %H:%M:%S')
             self.discipline = message.text
 
-            group = database.get_group_by_id()
-            teachers = self.list_of_teachers(semester=group[5])   # Получение списка преподавателей по семестру и дисциплине
-            print(teachers)
+            group = database.get_group_by_id(user_id=message.from_user.id)
+            teachers = self.list_of_teachers(discipline=self.discipline, semester=group[5])   # Получение списка преподавателей по семестру и дисциплине
 
             if teachers is None:
-                bot.send_message(message.chat.id, "Ooops, кажется данного предмета нет в базе! ☹️ \nУже сообщил о проблеме, скоро добавим \nВыберите другой предмет")
+                bot.send_message(message.chat.id,
+                                 "Ooops, кажется данного предмета нет в базе! ☹️ \nУже сообщил о проблеме, скоро добавим \nВыберите другой предмет")
                 bot.send_message(465825972,
                                  f"❗ Отсутствует дисциплина *{message.text}* у группы *{group}*",
                                  parse_mode='markdown')
@@ -384,6 +421,7 @@ class SemesterForm:
                 for i, q in enumerate(form_data.keys()):
                     form_data[q]['teacher'] = teachers[i]
 
+                print(form_data.values())
                 self.questions = iter(form_data.values())
                 self.question = next(self.questions)
                 self.ask(message)
@@ -393,7 +431,6 @@ class SemesterForm:
             bot.register_next_step_handler(message, self.semester_form)
 
     def ask(self, message):
-
         if self.question['teacher'] is not None:
             if self.question['type'] == 'scale':
                 markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
@@ -406,25 +443,24 @@ class SemesterForm:
             bot.register_next_step_handler(message, self.read_answer)
         else:
             try:
-                form.rates.extend([None, None])
+                self.rates.extend([None, None])
                 next(self.questions)
                 self.question = next(self.questions)
                 self.ask(message)
             except StopIteration:
                 self.end_of_form(message)
 
-
     def read_answer(self, message):
         if message.text == '/return':
             bot.send_message(message.chat.id,
                              "Данные не были сохранены ⚠️",
                              reply_markup=types.ReplyKeyboardRemove())
-            bot.register_next_step_handler(message, back_to_commands)
+            bot.register_next_step_handler(message, start)
         elif message.content_type == 'text' and (self.question['type'] == 'text' or
                                                  self.question['type'] == 'scale' and
                                                  message.text in [str(i) for i in range(1, 11)]):
             try:
-                form.rates.append(message.text)
+                self.rates.append(message.text)
                 self.question = next(self.questions)
                 self.ask(message)
             except StopIteration:
@@ -435,11 +471,7 @@ class SemesterForm:
             bot.register_next_step_handler(message, self.read_answer)
 
 
-user = User()
 database = Database()
-feedback = Feedback()
-form = SemesterForm()
-
 # _________________________________ПРИВЕТСТВЕННЫЙ ЭКРАН________________________________________
 
 @bot.message_handler(commands=['start'])
@@ -447,26 +479,21 @@ def send_welcome(message):
     database.create()
     users_ids = database.get_ids()
 
-    user_id = message.from_user.id
+    user = User(user_id=message.from_user.id)
 
-    user.id = user_id
-    database.id = user_id
-    feedback.id = user_id
-    form.id = user_id
-
-    if user_id in users_ids:
-        markup = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
-        button1 = types.KeyboardButton('📑 Семестровый опрос')
+    if message.from_user.id in users_ids:
+        markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+        button1 = types.KeyboardButton('📑 Опрос по дисциплинам')
         button2 = types.KeyboardButton('✍️ Обратная связь')
         markup.row(button1)
         markup.row(button2)
-        if user_id == admin_id:
+        if message.from_user.id in admin_ids:
             markup.row(types.KeyboardButton('💽 База данных'))
+            markup.row(types.KeyboardButton('❌ Удалить формы'))
         bot.send_message(message.chat.id, f"Привет! Чем могу помочь? 💁🏻", reply_markup=markup)
         bot.register_next_step_handler(message, start)
-
     else:
-        markup = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
+        markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
         button1 = types.KeyboardButton("Бакалавриат")
         button2 = types.KeyboardButton("Магистратура")
         markup.row(button1, button2)
@@ -478,16 +505,21 @@ def send_welcome(message):
 
 def start(message):
 
-    if message.text == '📑 Семестровый опрос':
-        form.choose_semester_form(message)
+    if message.text == '📑 Опрос по дисциплинам':
+        form = SemesterForm(user_id=message.from_user.id)
+        form.choose_term(message)
 
     elif message.text == '✍️ Обратная связь':
         bot.send_message(message.chat.id, "Ваши замечания/предложения: ️")
+        feedback = Feedback(user_id=message.from_user.id)
         bot.register_next_step_handler(message, feedback.read_feedback)
 
-    elif message.text == '💽 База данных' and user.id == admin_id:
+    elif message.text == '💽 База данных' and message.from_user.id in admin_ids:
         with open('feedback.sql', 'rb') as doc:
-            bot.send_document(admin_id, doc)
+            bot.send_document(chat_id=message.from_user.id, document=doc)
+
+    elif message.text == '❌ Удалить формы' and message.from_user.id in admin_ids:
+        database.delete_forms(user_id=message.from_user.id)
 
     elif message.text == '/help':
         help(message)
@@ -500,9 +532,6 @@ def start(message):
 
     elif message.text == '/edit':
         edit(message)
-
-    elif message.text == '/return':
-        back_to_commands(message)
 
     else:
         bot.send_message(message.chat.id, "Используйте кнопки или команды 🙃️")
@@ -538,14 +567,14 @@ def back_to_commands(message):
 
 @bot.message_handler(commands=['edit'])
 def edit(message):
-    markup = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
     button1 = types.KeyboardButton('Да')
     button2 = types.KeyboardButton('Нет')
     button3 = types.KeyboardButton('А какая у меня группа? 👉👈')
     markup.row(button1, button2)
     markup.row(button3)
     bot.send_message(message.chat.id, f"Вы хотите изменить свою группу?", reply_markup=markup)
-    bot.register_next_step_handler(message, user.group_edit)
+    bot.register_next_step_handler(message, database.group_edit)
 
 
 @bot.message_handler(content_types=['text'])
