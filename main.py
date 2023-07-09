@@ -270,9 +270,7 @@ class SemesterForm:
     term: str = None
 
     counter: int = 0
-
-    question: dict = field(default_factory=dict)
-    questions: iter = field(default_factory=list)
+    questions: list = field(default_factory=list)
 
     rates: list = field(default_factory=list)
     empty_disciplines: list = field(default_factory=list)
@@ -335,7 +333,7 @@ class SemesterForm:
 
     def end_of_form(self, message):
         self.add_filled_form()
-        self.rates = []
+        self.rates = [None, None, None, None, None, None, None, None, None]
         bot.send_message(message.chat.id, "Спасибо за ответы! 🙏 \nПродолжим? /return для отмены")
         bot.send_message(465825972,
                          f"💬 *New Completed Form* for group: {database.get_group_by_id(user_id=message.from_user.id)}",
@@ -421,9 +419,9 @@ class SemesterForm:
                 for i, q in enumerate(form_data.keys()):
                     form_data[q]['teacher'] = teachers[i]
 
-                print(form_data.values())
-                self.questions = iter(form_data.values())
-                self.question = next(self.questions)
+                self.questions = list(form_data.values())
+                self.rates = [None, None, None, None, None, None, None, None, None]
+                self.counter = 0
                 self.ask(message)
 
         else:
@@ -431,39 +429,40 @@ class SemesterForm:
             bot.register_next_step_handler(message, self.semester_form)
 
     def ask(self, message):
-        if self.question['teacher'] is not None:
-            if self.question['type'] == 'scale':
+        question = self.questions[self.counter]
+        if question['teacher'] is not None:
+            if question['type'] == 'scale':
                 markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
                 for i in range(1, 11, 2):
                     markup.row(types.KeyboardButton(str(i)), types.KeyboardButton(str(i+1)))
-                bot.send_message(message.chat.id, self.question['text'] + f'\nПреподаватель: {self.question["teacher"]}', reply_markup=markup)
+                bot.send_message(message.chat.id, question['text'] + f'\nПреподаватель: {question["teacher"]}', reply_markup=markup)
 
-            elif self.question['type'] == 'text':
-                bot.send_message(message.chat.id, self.question['text'], reply_markup=types.ReplyKeyboardRemove())
+            elif question['type'] == 'text':
+                bot.send_message(message.chat.id, question['text'], reply_markup=types.ReplyKeyboardRemove())
             bot.register_next_step_handler(message, self.read_answer)
         else:
-            try:
-                self.rates.extend([None, None])
-                next(self.questions)
-                self.question = next(self.questions)
+            self.rates[self.counter: self.counter + 2] = None, None
+            self.counter += 2
+            if self.counter < 9:
                 self.ask(message)
-            except StopIteration:
+            else:
                 self.end_of_form(message)
 
     def read_answer(self, message):
+        question = self.questions[self.counter]
         if message.text == '/return':
             bot.send_message(message.chat.id,
                              "Данные не были сохранены ⚠️",
                              reply_markup=types.ReplyKeyboardRemove())
             bot.register_next_step_handler(message, start)
-        elif message.content_type == 'text' and (self.question['type'] == 'text' or
-                                                 self.question['type'] == 'scale' and
+        elif message.content_type == 'text' and (question['type'] == 'text' or
+                                                 question['type'] == 'scale' and
                                                  message.text in [str(i) for i in range(1, 11)]):
-            try:
-                self.rates.append(message.text)
-                self.question = next(self.questions)
+            self.rates[self.counter] = message.text
+            self.counter += 1
+            if self.counter < 9:
                 self.ask(message)
-            except StopIteration:
+            else:
                 self.end_of_form(message)
 
         else:
