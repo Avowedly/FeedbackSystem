@@ -10,9 +10,6 @@ import pandas as pd
 with open("token.txt", 'r') as file:
     token = file.readline()
 
-with open("form.json", 'r', encoding="UTF-8") as file:
-    form_data = json.load(file)
-
 with open("disciplines.json", 'r', encoding="UTF-8") as file:
     disciplines_data = json.load(file)
 
@@ -362,7 +359,6 @@ class SemesterForm:
         a = iter(iterable)
         return zip(a, a)
 
-
     def choose_semester_form(self, message):
         group = database.get_group_by_id(user_id=message.from_user.id)
 
@@ -400,6 +396,9 @@ class SemesterForm:
             bot.register_next_step_handler(message, self.semester_form)
 
     def semester_form(self, message):
+        with open("form.json", 'r', encoding="UTF-8") as file:
+            local_form_data = json.load(file)
+
         if message.text in ["⏪ На главную", "/menu", "↩️ Назад"]:
             message.text = '/start'
             send_welcome(message)
@@ -411,6 +410,7 @@ class SemesterForm:
 
             group = database.get_group_by_id(user_id=message.from_user.id)
             teachers = self.list_of_teachers(discipline=self.discipline, semester=group[5])   # Получение списка преподавателей по семестру и дисциплине
+            print(message.from_user.id, teachers)
 
             if teachers is None:
                 bot.send_message(message.chat.id,
@@ -420,10 +420,10 @@ class SemesterForm:
                                  parse_mode='markdown')
                 bot.register_next_step_handler(message, self.semester_form)
             else:
-                for i, q in enumerate(form_data.keys()):
-                    form_data[q]['teacher'] = teachers[i]
+                for i, q in enumerate(local_form_data.keys()):
+                    local_form_data[q]['teacher'] = teachers[i]
 
-                self.questions = list(form_data.values())
+                self.questions = list(local_form_data.values())
                 self.rates = [None, None, None, None, None, None, None, None, None]
                 self.counter = 0
                 self.ask(message)
