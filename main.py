@@ -326,11 +326,11 @@ class SemesterForm:
         return set(filled_disciplines)
 
     @staticmethod
-    def list_of_teachers(discipline, semester):
+    def list_of_teachers(discipline, semester, year):
         connection = sqlite3.connect(database_name)
         with closing(connection.cursor()) as cursor:
-            sql_script = "SELECT * FROM teachers WHERE Предмет = ? AND Семестр = ?"
-            data_tuple = (discipline, semester)
+            sql_script = "SELECT * FROM teachers WHERE Предмет = ? AND Семестр = ? AND Год = ?"
+            data_tuple = (discipline, semester, year)
             cursor.execute(sql_script, data_tuple)
             teachers = cursor.fetchone()
         connection.close()
@@ -409,8 +409,8 @@ class SemesterForm:
             self.discipline = message.text
 
             group = database.get_group_by_id(user_id=message.from_user.id)
-            teachers = self.list_of_teachers(discipline=self.discipline, semester=group[5])   # Получение списка преподавателей по семестру и дисциплине
-            print(message.from_user.id, teachers)
+            teachers = self.list_of_teachers(discipline=self.discipline, semester=group[5], year='2022-2023')   # Получение списка преподавателей по семестру и дисциплине
+                                                                                                                # FIXME Добавить зависимость year от года
 
             if teachers is None:
                 bot.send_message(message.chat.id,
@@ -605,4 +605,4 @@ def commands(message):
                      parse_mode='markdown', reply_markup=types.ReplyKeyboardRemove())
 
 
-bot.infinity_polling()
+bot.infinity_polling(skip_pending=True)
